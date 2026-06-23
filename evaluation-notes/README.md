@@ -5,3 +5,4 @@ Fork-local verification notes for agent-safety work. These files capture what wa
 - [Read evaluation](reads.md)
 - [Write evaluation](writes.md)
 - [Dangerous grant evaluation](grants.md)
+- [Backup notes](backups.md)
