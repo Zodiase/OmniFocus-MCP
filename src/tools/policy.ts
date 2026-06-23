@@ -102,14 +102,16 @@ export function dangerousGrantRequiredResult(toolName: string, reason: string): 
   };
 }
 
-export function dangerousDryRunResult(
+export function dangerousAuditPayload(
   toolName: string,
   args: Record<string, unknown>,
-  claims?: DangerousGrantClaims
-): ToolResult {
+  claims: DangerousGrantClaims | undefined,
+  executed: boolean
+): Record<string, unknown> {
   const strippedArgs = stripDangerousGrant(args);
-  const payload = {
-    dryRun: true,
+
+  return {
+    dryRun: !executed,
     tool: toolName,
     accessLevel: 'dangerous',
     argsHash: dangerousArgsHash(args),
@@ -124,19 +126,47 @@ export function dangerousDryRunResult(
       notBefore: claims.nbf,
       reason: claims.reason,
     } : undefined,
-    executed: false,
-    message: 'Grant verified; OmniFocus mutation was not executed because dangerous dry-run mode is enabled.',
+    executed,
+    message: executed
+      ? 'Grant verified; OmniFocus mutation handler executed.'
+      : 'Grant verified; OmniFocus mutation was not executed because dangerous dry-run mode is enabled.',
   };
+}
+
+export function appendDangerousAuditResult(
+  result: ToolResult,
+  toolName: string,
+  args: Record<string, unknown>,
+  claims: DangerousGrantClaims | undefined,
+  executed: boolean
+): ToolResult {
+  const auditText = JSON.stringify({
+    dangerousAction: dangerousAuditPayload(toolName, args, claims, executed),
+  }, null, 2);
 
   return {
+    ...result,
+    content: [
+      ...result.content,
+      {
+        type: 'text',
+        text: auditText,
+      },
+    ],
+  };
+}
+
+export function dangerousDryRunResult(
+  toolName: string,
+  args: Record<string, unknown>,
+  claims?: DangerousGrantClaims
+): ToolResult {
+  return appendDangerousAuditResult({
     content: [{
       type: 'text',
-      text: [
-        `Dangerous dry run: grant verified for "${toolName}", but OMNIFOCUS_MCP_DANGEROUS_DRY_RUN is enabled so no OmniFocus mutation was executed.`,
-        JSON.stringify({ dangerousDryRun: payload }, null, 2),
-      ].join('\n')
+      text: `Dangerous dry run: grant verified for "${toolName}", but OMNIFOCUS_MCP_DANGEROUS_DRY_RUN is enabled so no OmniFocus mutation was executed.`
     }]
-  };
+  }, toolName, args, claims, false);
 }
 
 export function blockedToolResult(toolName: string, args: any, mode = getOmniFocusMcpMode()): ToolResult {
@@ -163,17 +193,24 @@ export function guardToolHandler(toolName: string, handler: ToolHandler): ToolHa
       return blockedToolResult(toolName, args, mode);
     }
 
+    let dangerousGrantClaims: DangerousGrantClaims | undefined;
     if (accessLevel === 'dangerous') {
       const grantResult = validateDangerousGrant(toolName, args);
       if (!grantResult.valid) {
         return dangerousGrantRequiredResult(toolName, grantResult.reason ?? 'Grant validation failed.');
       }
+      dangerousGrantClaims = grantResult.claims;
       if (isDangerousDryRunEnabled()) {
-        return dangerousDryRunResult(toolName, args, grantResult.claims);
+        return dangerousDryRunResult(toolName, args, dangerousGrantClaims);
       }
     }
 
-    return handler(stripDangerousGrant(args), extra);
+    const result = await handler(stripDangerousGrant(args), extra);
+    if (accessLevel === 'dangerous') {
+      return appendDangerousAuditResult(result, toolName, args, dangerousGrantClaims, true);
+    }
+
+    return result;
   };
 }
 

@@ -64,7 +64,7 @@ To test dangerous grant validation without executing the destructive OmniFocus m
 export OMNIFOCUS_MCP_DANGEROUS_DRY_RUN=1
 ```
 
-Dry-run responses include a `dangerousDryRun` JSON object with the tool name, sanitized arguments, canonical argument hash, grant metadata, and `executed: false` so tests can assert the exact operation that would have run.
+Dangerous responses include a `dangerousAction` JSON object with the tool name, sanitized arguments, canonical argument hash, grant metadata, and whether the mutation handler executed. Dry-run sets `executed: false`; normal dangerous execution appends the same audit object with `executed: true`.
 
 ### Claude Desktop
 

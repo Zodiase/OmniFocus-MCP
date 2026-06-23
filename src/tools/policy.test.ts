@@ -6,6 +6,7 @@ import {
   resetDangerousGrantReplayCache,
 } from './dangerousGrant.js';
 import {
+  appendDangerousAuditResult,
   blockedToolResult,
   dangerousGrantRequiredResult,
   dangerousDryRunResult,
@@ -181,6 +182,12 @@ describe('OmniFocus MCP safety policy', () => {
 
         expect(handler).toHaveBeenCalledWith(args, {});
         expect(result.content[0].text).toBe('removed');
+        const payload = extractDangerousActionPayload(result);
+        expect(payload.tool).toBe('remove_item');
+        expect(payload.args).toEqual(args);
+        expect(payload.executed).toBe(true);
+        expect(payload.dryRun).toBe(false);
+        expect(payload.grant.jti).toBe('policy-grant-1');
       } finally {
         if (originalMode === undefined) {
           delete process.env.OMNIFOCUS_MCP_MODE;
@@ -224,10 +231,11 @@ describe('OmniFocus MCP safety policy', () => {
         expect(result.isError).toBeUndefined();
         expect(result.content[0].text).toContain('Dangerous dry run');
         expect(result.content[0].text).toContain('no OmniFocus mutation was executed');
-        const payload = extractDangerousDryRunPayload(result.content[0].text);
+        const payload = extractDangerousActionPayload(result);
         expect(payload.tool).toBe('remove_item');
         expect(payload.args).toEqual(args);
         expect(payload.executed).toBe(false);
+        expect(payload.dryRun).toBe(true);
         expect(payload.grant.jti).toBe('policy-grant-dry-run-1');
         expect(payload.grant.reason).toBeUndefined();
       } finally {
@@ -288,7 +296,7 @@ describe('OmniFocus MCP safety policy', () => {
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toContain('grant verified');
       expect(result.content[0].text).toContain('no OmniFocus mutation was executed');
-      const payload = extractDangerousDryRunPayload(result.content[0].text);
+      const payload = extractDangerousActionPayload(result);
       expect(payload).toMatchObject({
         dryRun: true,
         tool: 'remove_item',
@@ -301,11 +309,39 @@ describe('OmniFocus MCP safety policy', () => {
         },
       });
     });
+
+    it('appends dangerous audit logs to real execution results', () => {
+      const result = appendDangerousAuditResult({
+        content: [{ type: 'text', text: 'removed' }],
+      }, 'remove_item', { name: 'Draft', itemType: 'task' }, {
+        iss: 'omnifocus-mcp',
+        aud: 'omnifocus-mcp-dangerous-grant',
+        iat: 100,
+        exp: 200,
+        jti: 'grant-id',
+        grant_version: 1,
+        grant_type: 'exact',
+        scope: 'dangerous',
+        allowed_tools: ['remove_item'],
+        operation: {
+          tool: 'remove_item',
+          args_sha256: 'hash',
+        },
+      }, true);
+
+      expect(result.content[0].text).toBe('removed');
+      const payload = extractDangerousActionPayload(result);
+      expect(payload.executed).toBe(true);
+      expect(payload.dryRun).toBe(false);
+      expect(payload.message).toContain('handler executed');
+    });
   });
 });
 
-function extractDangerousDryRunPayload(text: string): any {
-  const jsonStart = text.indexOf('{');
+function extractDangerousActionPayload(result: { content: Array<{ type: 'text'; text: string }> }): any {
+  const auditContent = result.content.find((content) => content.text.includes('"dangerousAction"'));
+  expect(auditContent).toBeDefined();
+  const jsonStart = auditContent!.text.indexOf('{');
   expect(jsonStart).toBeGreaterThanOrEqual(0);
-  return JSON.parse(text.slice(jsonStart)).dangerousDryRun;
+  return JSON.parse(auditContent!.text.slice(jsonStart)).dangerousAction;
 }
