@@ -38,7 +38,8 @@ const server = new McpServer(
     instructions: `OmniFocus MCP server for macOS task management.
 
 TOOL GUIDANCE:
-- Safety mode defaults to read-only; set OMNIFOCUS_MCP_MODE=write for ordinary writes or OMNIFOCUS_MCP_MODE=dangerous for destructive operations
+- Safety mode defaults to read-only; set OMNIFOCUS_MCP_MODE=write for ordinary writes
+- Destructive operations require OMNIFOCUS_MCP_MODE=dangerous plus a fresh signed dangerousGrant bound to the exact tool arguments
 - Prefer query_omnifocus over dump_database for targeted lookups (85-95% context savings)
 - Use the "fields" parameter to request only needed fields
 - Use "summary: true" for quick counts without full data

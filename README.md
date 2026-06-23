@@ -36,9 +36,27 @@ Set `OMNIFOCUS_MCP_MODE` only when you want to allow writes:
 |---|---|
 | unset or `readonly` | Allows read tools and resources. Blocks all writes. |
 | `write` | Allows ordinary creates and edits. Still blocks removals, completion/drop status changes, and broad batch adds. |
-| `dangerous` | Allows all tools, including removals and destructive status changes. Use briefly and deliberately. |
+| `dangerous` | Allows destructive tools only when each destructive call also includes a short-lived signed `dangerousGrant`. Use briefly and deliberately. |
 
-Recommended flow for agent use: start in read-only mode, inspect first with `query_omnifocus`, then switch to `write` only for planned captures or edits. Avoid `dangerous` unless you are intentionally removing items or marking them completed/dropped.
+Recommended flow for agent use: start in read-only mode, inspect first with `query_omnifocus`, then switch to `write` only for planned captures or edits. Avoid `dangerous` unless you are intentionally removing items or marking them completed/dropped, and issue a fresh grant for each destructive operation.
+
+Dangerous grants are compact EdDSA-signed tokens bound to the exact tool name and canonical argument hash. Configure the verifier with an Ed25519 public key in PEM or OpenSSH `ssh-ed25519` format:
+
+```bash
+export OMNIFOCUS_MCP_DANGEROUS_GRANT_PUBLIC_KEY='-----BEGIN PUBLIC KEY-----...'
+export OMNIFOCUS_MCP_DANGEROUS_GRANT_PUBLIC_KEY='ssh-ed25519 AAAA...'
+export OMNIFOCUS_MCP_DANGEROUS_GRANT_PUBLIC_KEY_PATH=/path/to/public-key.pem
+```
+
+Generate an exact-operation grant with:
+
+```bash
+omnifocus-mcp-grant \
+  --tool remove_item \
+  --args-json '{"name":"TEST: old task","itemType":"task"}' \
+  --private-key-ref 'op://Private/SSH Key/private key?ssh-format=openssh' \
+  --reason 'cleanup test data'
+```
 
 ### Claude Desktop
 

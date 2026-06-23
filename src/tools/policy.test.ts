@@ -1,11 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
+import { generateKeyPairSync } from 'crypto';
+import {
+  createDangerousGrantToken,
+  createExactDangerousGrantClaims,
+  resetDangerousGrantReplayCache,
+} from './dangerousGrant.js';
 import {
   blockedToolResult,
+  dangerousGrantRequiredResult,
   getOmniFocusMcpMode,
   getToolAccessLevel,
   guardToolHandler,
   isToolAllowed,
 } from './policy.js';
+
+const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' }).toString();
 
 describe('OmniFocus MCP safety policy', () => {
   describe('getOmniFocusMcpMode', () => {
@@ -112,6 +123,69 @@ describe('OmniFocus MCP safety policy', () => {
       expect(handler).toHaveBeenCalledOnce();
       expect(result.content[0].text).toBe('queried');
     });
+
+    it('blocks dangerous handlers without a grant even in dangerous mode', async () => {
+      const handler = vi.fn().mockResolvedValue({
+        content: [{ type: 'text', text: 'removed' }],
+      });
+      const guardedHandler = guardToolHandler('remove_item', handler);
+
+      const originalMode = process.env.OMNIFOCUS_MCP_MODE;
+      process.env.OMNIFOCUS_MCP_MODE = 'dangerous';
+
+      try {
+        const result = await guardedHandler({ name: 'Draft', itemType: 'task' }, {} as any);
+
+        expect(handler).not.toHaveBeenCalled();
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('requires a valid dangerousGrant');
+      } finally {
+        if (originalMode === undefined) {
+          delete process.env.OMNIFOCUS_MCP_MODE;
+        } else {
+          process.env.OMNIFOCUS_MCP_MODE = originalMode;
+        }
+      }
+    });
+
+    it('calls dangerous handlers with a valid exact grant and strips it from args', async () => {
+      resetDangerousGrantReplayCache();
+      const handler = vi.fn().mockResolvedValue({
+        content: [{ type: 'text', text: 'removed' }],
+      });
+      const guardedHandler = guardToolHandler('remove_item', handler);
+      const args = { name: 'Draft', itemType: 'task' };
+      const claims = createExactDangerousGrantClaims({
+        toolName: 'remove_item',
+        args,
+        expiresInSeconds: 60,
+        jti: 'policy-grant-1',
+      });
+      const dangerousGrant = createDangerousGrantToken(claims, privateKeyPem);
+
+      const originalMode = process.env.OMNIFOCUS_MCP_MODE;
+      const originalPublicKey = process.env.OMNIFOCUS_MCP_DANGEROUS_GRANT_PUBLIC_KEY;
+      process.env.OMNIFOCUS_MCP_MODE = 'dangerous';
+      process.env.OMNIFOCUS_MCP_DANGEROUS_GRANT_PUBLIC_KEY = publicKeyPem;
+
+      try {
+        const result = await guardedHandler({ ...args, dangerousGrant }, {} as any);
+
+        expect(handler).toHaveBeenCalledWith(args, {});
+        expect(result.content[0].text).toBe('removed');
+      } finally {
+        if (originalMode === undefined) {
+          delete process.env.OMNIFOCUS_MCP_MODE;
+        } else {
+          process.env.OMNIFOCUS_MCP_MODE = originalMode;
+        }
+        if (originalPublicKey === undefined) {
+          delete process.env.OMNIFOCUS_MCP_DANGEROUS_GRANT_PUBLIC_KEY;
+        } else {
+          process.env.OMNIFOCUS_MCP_DANGEROUS_GRANT_PUBLIC_KEY = originalPublicKey;
+        }
+      }
+    });
   });
 
   describe('blockedToolResult', () => {
@@ -121,6 +195,14 @@ describe('OmniFocus MCP safety policy', () => {
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('required mode is "dangerous"');
       expect(result.content[0].text).toContain('OMNIFOCUS_MCP_MODE=dangerous');
+    });
+
+    it('explains missing or invalid grants', () => {
+      const result = dangerousGrantRequiredResult('remove_item', 'Missing dangerousGrant.');
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('requires a valid dangerousGrant');
+      expect(result.content[0].text).toContain('Missing dangerousGrant');
     });
   });
 });

@@ -1,4 +1,5 @@
 import { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
+import { validateDangerousGrant } from './dangerousGrant.js';
 
 export type OmniFocusMcpMode = 'readonly' | 'write' | 'dangerous';
 export type ToolAccessLevel = 'read' | 'write' | 'dangerous';
@@ -86,6 +87,16 @@ export function isToolAllowed(toolName: string, args: any, mode = getOmniFocusMc
   return DANGEROUS_MODES.includes(mode);
 }
 
+export function dangerousGrantRequiredResult(toolName: string, reason: string): ToolResult {
+  return {
+    content: [{
+      type: 'text',
+      text: `Tool "${toolName}" requires a valid dangerousGrant for this destructive operation. ${reason}`
+    }],
+    isError: true,
+  };
+}
+
 export function blockedToolResult(toolName: string, args: any, mode = getOmniFocusMcpMode()): ToolResult {
   const accessLevel = getToolAccessLevel(toolName, args);
   const requiredMode = accessLevel === 'dangerous'
@@ -104,13 +115,30 @@ export function blockedToolResult(toolName: string, args: any, mode = getOmniFoc
 export function guardToolHandler(toolName: string, handler: ToolHandler): ToolHandler {
   return async (args: any, extra: RequestHandlerExtra) => {
     const mode = getOmniFocusMcpMode();
+    const accessLevel = getToolAccessLevel(toolName, args);
 
     if (!isToolAllowed(toolName, args, mode)) {
       return blockedToolResult(toolName, args, mode);
     }
 
-    return handler(args, extra);
+    if (accessLevel === 'dangerous') {
+      const grantResult = validateDangerousGrant(toolName, args);
+      if (!grantResult.valid) {
+        return dangerousGrantRequiredResult(toolName, grantResult.reason ?? 'Grant validation failed.');
+      }
+    }
+
+    return handler(stripDangerousGrant(args), extra);
   };
+}
+
+function stripDangerousGrant(args: any): any {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) {
+    return args;
+  }
+
+  const { dangerousGrant, ...rest } = args;
+  return rest;
 }
 
 function isDestructiveEdit(args: any): boolean {

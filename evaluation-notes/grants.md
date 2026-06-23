@@ -1,0 +1,81 @@
+# Dangerous Grant Evaluation Notes
+
+These notes record the dangerous-operation grant design in this fork.
+
+## Goal
+
+MCP/client approval prompts are useful UX, but they are not the final safety boundary. The server should require a fresh user-mediated capability before destructive operations reach the OmniFocus mutation primitives.
+
+The implemented v1 design requires both:
+
+- `OMNIFOCUS_MCP_MODE=dangerous`
+- a valid `dangerousGrant` argument on the destructive tool call
+
+## V1 Grant Semantics
+
+V1 implements exact-operation grants only:
+
+- one tool name
+- one canonicalized argument hash
+- one short expiry
+- one `jti`, accepted once per server process
+- one EdDSA signature from a configured public key
+
+The grant verifier rejects missing, expired, replayed, wrong-tool, wrong-args, wrong-audience, wrong-issuer, unsupported-version, and unsupported-grant-type tokens.
+
+The tool gate strips `dangerousGrant` before calling the underlying tool handler so mutation primitives do not receive authorization metadata.
+
+## V2-Ready Payload Shape
+
+The claims schema intentionally leaves room for a future umbrella grant:
+
+```json
+{
+  "iss": "omnifocus-mcp",
+  "aud": "omnifocus-mcp-dangerous-grant",
+  "sub": "user-approved-operation",
+  "iat": 1782196600,
+  "nbf": 1782196600,
+  "exp": 1782196900,
+  "jti": "random-id",
+  "grant_version": 1,
+  "grant_type": "exact",
+  "scope": "dangerous",
+  "allowed_tools": ["remove_item"],
+  "operation": {
+    "tool": "remove_item",
+    "args_sha256": "sha256-of-canonical-args"
+  },
+  "constraints": {
+    "max_operations": 1
+  },
+  "reason": "cleanup test data"
+}
+```
+
+Future `grant_type: "pattern"` grants can reuse `allowed_tools` and `constraints` for short-lived cleanup sessions, for example deleting up to 20 `TEST:` items.
+
+## Signing Path
+
+The current helper signs compact EdDSA JWT-style grants and accepts PEM or unencrypted OpenSSH Ed25519 private keys:
+
+```sh
+omnifocus-mcp-grant \
+  --tool remove_item \
+  --args-json '{"name":"TEST: item","itemType":"task"}' \
+  --private-key-ref 'op://Private/SSH Key - MacBook Pro R9JG4390L4/private key?ssh-format=openssh' \
+  --reason 'cleanup test data'
+```
+
+The `--private-key-ref` mode uses `op read --no-newline` and keeps the private key in process memory only. This is a pragmatic v1 path for standard JWT-style signatures. The verifier accepts PEM or OpenSSH `ssh-ed25519` public keys.
+
+The preferred no-export path is still worth investigating: use the 1Password SSH agent with `ssh-keygen -Y sign` so the private key never leaves 1Password. That produces an SSH signature envelope rather than a normal JOSE/JWT signature, so it should be treated as a separate signer/verifier backend.
+
+## Verified Locally
+
+- Unit tests cover canonical hashing, grant creation, signature verification, expiry, args mismatch, replay rejection, missing public-key config, policy blocking without grants, and policy allowance with valid exact grants.
+- Build passes with the grant helper compiled to `dist/grantDangerous.js`.
+- The grant helper was smoke-tested with a temporary generated PEM Ed25519 keypair and produced a three-part compact token.
+- The grant helper and verifier were smoke-tested end-to-end with a temporary `ssh-keygen -t ed25519` OpenSSH private/public keypair.
+
+No live destructive OmniFocus cleanup was performed while adding this grant layer.
