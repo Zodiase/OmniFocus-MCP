@@ -8,9 +8,11 @@ import {
 import {
   blockedToolResult,
   dangerousGrantRequiredResult,
+  dangerousDryRunResult,
   getOmniFocusMcpMode,
   getToolAccessLevel,
   guardToolHandler,
+  isDangerousDryRunEnabled,
   isToolAllowed,
 } from './policy.js';
 
@@ -84,6 +86,12 @@ describe('OmniFocus MCP safety policy', () => {
 
     it('allows dangerous operations only in dangerous mode', () => {
       expect(isToolAllowed('remove_item', { id: 'abc', itemType: 'task' }, 'dangerous')).toBe(true);
+    });
+
+    it('detects dangerous dry-run mode', () => {
+      expect(isDangerousDryRunEnabled({})).toBe(false);
+      expect(isDangerousDryRunEnabled({ OMNIFOCUS_MCP_DANGEROUS_DRY_RUN: '1' })).toBe(true);
+      expect(isDangerousDryRunEnabled({ OMNIFOCUS_MCP_DANGEROUS_DRY_RUN: 'true' })).toBe(true);
     });
   });
 
@@ -186,6 +194,54 @@ describe('OmniFocus MCP safety policy', () => {
         }
       }
     });
+
+    it('verifies grants but skips dangerous handlers in dry-run mode', async () => {
+      resetDangerousGrantReplayCache();
+      const handler = vi.fn().mockResolvedValue({
+        content: [{ type: 'text', text: 'removed' }],
+      });
+      const guardedHandler = guardToolHandler('remove_item', handler);
+      const args = { name: 'Draft', itemType: 'task' };
+      const claims = createExactDangerousGrantClaims({
+        toolName: 'remove_item',
+        args,
+        expiresInSeconds: 60,
+        jti: 'policy-grant-dry-run-1',
+      });
+      const dangerousGrant = createDangerousGrantToken(claims, privateKeyPem);
+
+      const originalMode = process.env.OMNIFOCUS_MCP_MODE;
+      const originalPublicKey = process.env.OMNIFOCUS_MCP_DANGEROUS_GRANT_PUBLIC_KEY;
+      const originalDryRun = process.env.OMNIFOCUS_MCP_DANGEROUS_DRY_RUN;
+      process.env.OMNIFOCUS_MCP_MODE = 'dangerous';
+      process.env.OMNIFOCUS_MCP_DANGEROUS_GRANT_PUBLIC_KEY = publicKeyPem;
+      process.env.OMNIFOCUS_MCP_DANGEROUS_DRY_RUN = '1';
+
+      try {
+        const result = await guardedHandler({ ...args, dangerousGrant }, {} as any);
+
+        expect(handler).not.toHaveBeenCalled();
+        expect(result.isError).toBeUndefined();
+        expect(result.content[0].text).toContain('Dangerous dry run');
+        expect(result.content[0].text).toContain('no OmniFocus mutation was executed');
+      } finally {
+        if (originalMode === undefined) {
+          delete process.env.OMNIFOCUS_MCP_MODE;
+        } else {
+          process.env.OMNIFOCUS_MCP_MODE = originalMode;
+        }
+        if (originalPublicKey === undefined) {
+          delete process.env.OMNIFOCUS_MCP_DANGEROUS_GRANT_PUBLIC_KEY;
+        } else {
+          process.env.OMNIFOCUS_MCP_DANGEROUS_GRANT_PUBLIC_KEY = originalPublicKey;
+        }
+        if (originalDryRun === undefined) {
+          delete process.env.OMNIFOCUS_MCP_DANGEROUS_DRY_RUN;
+        } else {
+          process.env.OMNIFOCUS_MCP_DANGEROUS_DRY_RUN = originalDryRun;
+        }
+      }
+    });
   });
 
   describe('blockedToolResult', () => {
@@ -203,6 +259,14 @@ describe('OmniFocus MCP safety policy', () => {
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('requires a valid dangerousGrant');
       expect(result.content[0].text).toContain('Missing dangerousGrant');
+    });
+
+    it('explains dangerous dry-run skips', () => {
+      const result = dangerousDryRunResult('remove_item');
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('grant verified');
+      expect(result.content[0].text).toContain('no OmniFocus mutation was executed');
     });
   });
 });

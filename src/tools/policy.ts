@@ -87,6 +87,11 @@ export function isToolAllowed(toolName: string, args: any, mode = getOmniFocusMc
   return DANGEROUS_MODES.includes(mode);
 }
 
+export function isDangerousDryRunEnabled(env = process.env): boolean {
+  return env.OMNIFOCUS_MCP_DANGEROUS_DRY_RUN === '1'
+    || env.OMNIFOCUS_MCP_DANGEROUS_DRY_RUN === 'true';
+}
+
 export function dangerousGrantRequiredResult(toolName: string, reason: string): ToolResult {
   return {
     content: [{
@@ -94,6 +99,15 @@ export function dangerousGrantRequiredResult(toolName: string, reason: string): 
       text: `Tool "${toolName}" requires a valid dangerousGrant for this destructive operation. ${reason}`
     }],
     isError: true,
+  };
+}
+
+export function dangerousDryRunResult(toolName: string): ToolResult {
+  return {
+    content: [{
+      type: 'text',
+      text: `Dangerous dry run: grant verified for "${toolName}", but OMNIFOCUS_MCP_DANGEROUS_DRY_RUN is enabled so no OmniFocus mutation was executed.`
+    }]
   };
 }
 
@@ -125,6 +139,9 @@ export function guardToolHandler(toolName: string, handler: ToolHandler): ToolHa
       const grantResult = validateDangerousGrant(toolName, args);
       if (!grantResult.valid) {
         return dangerousGrantRequiredResult(toolName, grantResult.reason ?? 'Grant validation failed.');
+      }
+      if (isDangerousDryRunEnabled()) {
+        return dangerousDryRunResult(toolName);
       }
     }
 

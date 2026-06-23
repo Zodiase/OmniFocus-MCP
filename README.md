@@ -58,6 +58,12 @@ omnifocus-mcp-grant \
   --reason 'cleanup test data'
 ```
 
+To test dangerous grant validation without executing the destructive OmniFocus mutation, set:
+
+```bash
+export OMNIFOCUS_MCP_DANGEROUS_DRY_RUN=1
+```
+
 ### Claude Desktop
 
 Add the server to `~/Library/Application Support/Claude/claude_desktop_config.json`:

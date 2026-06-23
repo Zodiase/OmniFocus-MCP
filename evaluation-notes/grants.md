@@ -25,6 +25,8 @@ The grant verifier rejects missing, expired, replayed, wrong-tool, wrong-args, w
 
 The tool gate strips `dangerousGrant` before calling the underlying tool handler so mutation primitives do not receive authorization metadata.
 
+For testing, `OMNIFOCUS_MCP_DANGEROUS_DRY_RUN=1` verifies a valid grant and then stops before calling the destructive handler. This makes MCP-level positive grant tests possible without touching OmniFocus mutation primitives.
+
 ## V2-Ready Payload Shape
 
 The claims schema intentionally leaves room for a future umbrella grant:
@@ -74,6 +76,7 @@ The preferred no-export path is still worth investigating: use the 1Password SSH
 ## Verified Locally
 
 - Unit tests cover canonical hashing, grant creation, signature verification, expiry, args mismatch, replay rejection, missing public-key config, policy blocking without grants, and policy allowance with valid exact grants.
+- Unit tests cover dangerous dry-run behavior: valid grants are verified, but the destructive handler is not called.
 - Build passes with the grant helper compiled to `dist/grantDangerous.js`.
 - The grant helper was smoke-tested with a temporary generated PEM Ed25519 keypair and produced a three-part compact token.
 - The grant helper and verifier were smoke-tested end-to-end with a temporary `ssh-keygen -t ed25519` OpenSSH private/public keypair.
