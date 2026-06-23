@@ -109,5 +109,14 @@ The preferred no-export path is still worth investigating: use the 1Password SSH
 - Build passes with the grant helper compiled to `dist/grantDangerous.js`.
 - The grant helper was smoke-tested with a temporary generated PEM Ed25519 keypair and produced a three-part compact token.
 - The grant helper and verifier were smoke-tested end-to-end with a temporary `ssh-keygen -t ed25519` OpenSSH private/public keypair.
+- The full dangerous dry-run MCP matrix passed with a temporary OpenSSH keypair. Each case returned `dangerousAction.executed: false`, `dangerousAction.dryRun: true`, and matching sanitized args:
+  - `remove_item`
+  - `batch_remove_items`
+  - `edit_item` with task `newStatus: completed`
+  - `edit_item` with task `newStatus: dropped`
+  - `edit_item` with task `newStatus: skipped`
+  - `edit_item` with project `newProjectStatus: completed`
+  - `edit_item` with project `newProjectStatus: dropped`
+  - `batch_add_items` with 11 items
 
 No live destructive OmniFocus cleanup was performed while adding this grant layer.
