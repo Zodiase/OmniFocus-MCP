@@ -24,6 +24,7 @@ Added `remove_tag`:
 - requires a valid exact `dangerousGrant`
 - supports `OMNIFOCUS_MCP_DANGEROUS_DRY_RUN=1`
 - appends the standard `dangerousAction` audit payload on dry-run and real execution
+- supports cleanup grants signed by the user's existing 1Password OpenSSH RSA key
 
 ## Local Verification
 
@@ -37,11 +38,13 @@ Unit tests cover:
 - blocked write-mode access
 - missing-grant blocking in dangerous mode
 - dry-run grant verification that skips the handler and returns `dangerousAction.executed: false`
+- OpenSSH RSA private/public grant signing and verification
 
 Commands run:
 
 ```sh
 npm test -- src/tools/primitives/removeTag.test.ts src/tools/policy.test.ts
+npm test -- src/tools/dangerousGrant.test.ts
 npm test
 npm run build
 ```
@@ -56,4 +59,42 @@ build passed
 
 ## Live Cleanup
 
-Pending. Before deleting the remaining `TEST-write-smoke-*` tag, use the backup checklist in `backups.md`, then run `remove_tag` with a fresh exact grant.
+Completed on 2026-06-23 after backup `20260623-025106`.
+
+Confirmed tag before removal:
+
+```json
+{
+  "id": "iGIsJzqYKQO",
+  "name": "TEST-write-smoke-2026-06-23T06-29-58-260Z",
+  "parentTagID": null,
+  "parentName": null,
+  "active": true,
+  "allowsNextAction": true,
+  "taskCount": 0
+}
+```
+
+The first signing attempt failed safely because the user's 1Password key is `ssh-rsa` and the grant layer initially only supported Ed25519. No mutation occurred; the guarded tool returned a missing-grant error.
+
+After adding RSA/`RS256` support, the grant helper signed an exact `remove_tag` grant through:
+
+```text
+op://Private/SSH Key - MacBook Pro R9JG4390L4/private key?ssh-format=openssh
+```
+
+The live `remove_tag` call returned:
+
+```text
+Tag "TEST-write-smoke-2026-06-23T06-29-58-260Z" removed successfully.
+dangerousAction.executed: true
+dangerousAction.dryRun: false
+dangerousAction.tool: remove_tag
+dangerousAction.grant.reason: cleanup leftover write-smoke TEST tag after backup 20260623-025106
+```
+
+Post-cleanup `list_tags` verification returned:
+
+```text
+null
+```
