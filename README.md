@@ -210,6 +210,12 @@ Remove a task or project.
 - `id` or `name`: which item to remove
 - `itemType`: `task` or `project`
 
+### `remove_tag`
+
+Remove a tag by ID, or by exact name as a fallback.
+
+- `id` or `name`: which tag to remove
+
 ### `batch_add_items`
 
 Create multiple tasks and projects in one operation. Each item accepts the same fields as `add_omnifocus_task` / `add_project`, plus `type` (`task` or `project`) and optional hierarchy helpers:

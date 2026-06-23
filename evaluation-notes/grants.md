@@ -147,8 +147,10 @@ Post-cleanup query for tasks in the project returned:
 No tasks found matching the specified criteria.
 ```
 
-The write-smoke tag remains because the MCP server does not currently expose tag deletion:
+The write-smoke tag remained after the first cleanup because the MCP server did not expose tag deletion at the time:
 
 ```text
 TEST-write-smoke-2026-06-23T06-29-58-260Z
 ```
+
+Issue #1 tracks adding `remove_tag`; follow-up verification is recorded in `tag-deletion.md`.
