@@ -64,6 +64,8 @@ To test dangerous grant validation without executing the destructive OmniFocus m
 export OMNIFOCUS_MCP_DANGEROUS_DRY_RUN=1
 ```
 
+Dry-run responses include a `dangerousDryRun` JSON object with the tool name, sanitized arguments, canonical argument hash, grant metadata, and `executed: false` so tests can assert the exact operation that would have run.
+
 ### Claude Desktop
 
 Add the server to `~/Library/Application Support/Claude/claude_desktop_config.json`:

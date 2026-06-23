@@ -224,6 +224,12 @@ describe('OmniFocus MCP safety policy', () => {
         expect(result.isError).toBeUndefined();
         expect(result.content[0].text).toContain('Dangerous dry run');
         expect(result.content[0].text).toContain('no OmniFocus mutation was executed');
+        const payload = extractDangerousDryRunPayload(result.content[0].text);
+        expect(payload.tool).toBe('remove_item');
+        expect(payload.args).toEqual(args);
+        expect(payload.executed).toBe(false);
+        expect(payload.grant.jti).toBe('policy-grant-dry-run-1');
+        expect(payload.grant.reason).toBeUndefined();
       } finally {
         if (originalMode === undefined) {
           delete process.env.OMNIFOCUS_MCP_MODE;
@@ -262,11 +268,44 @@ describe('OmniFocus MCP safety policy', () => {
     });
 
     it('explains dangerous dry-run skips', () => {
-      const result = dangerousDryRunResult('remove_item');
+      const result = dangerousDryRunResult('remove_item', { name: 'Draft', itemType: 'task' }, {
+        iss: 'omnifocus-mcp',
+        aud: 'omnifocus-mcp-dangerous-grant',
+        iat: 100,
+        exp: 200,
+        jti: 'grant-id',
+        grant_version: 1,
+        grant_type: 'exact',
+        scope: 'dangerous',
+        allowed_tools: ['remove_item'],
+        operation: {
+          tool: 'remove_item',
+          args_sha256: 'hash',
+        },
+        reason: 'test',
+      });
 
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toContain('grant verified');
       expect(result.content[0].text).toContain('no OmniFocus mutation was executed');
+      const payload = extractDangerousDryRunPayload(result.content[0].text);
+      expect(payload).toMatchObject({
+        dryRun: true,
+        tool: 'remove_item',
+        accessLevel: 'dangerous',
+        args: { name: 'Draft', itemType: 'task' },
+        executed: false,
+        grant: {
+          jti: 'grant-id',
+          reason: 'test',
+        },
+      });
     });
   });
 });
+
+function extractDangerousDryRunPayload(text: string): any {
+  const jsonStart = text.indexOf('{');
+  expect(jsonStart).toBeGreaterThanOrEqual(0);
+  return JSON.parse(text.slice(jsonStart)).dangerousDryRun;
+}

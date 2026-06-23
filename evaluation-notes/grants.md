@@ -27,6 +27,34 @@ The tool gate strips `dangerousGrant` before calling the underlying tool handler
 
 For testing, `OMNIFOCUS_MCP_DANGEROUS_DRY_RUN=1` verifies a valid grant and then stops before calling the destructive handler. This makes MCP-level positive grant tests possible without touching OmniFocus mutation primitives.
 
+Dry-run responses include a machine-checkable `dangerousDryRun` JSON object:
+
+```json
+{
+  "dangerousDryRun": {
+    "dryRun": true,
+    "tool": "remove_item",
+    "accessLevel": "dangerous",
+    "argsHash": "sha256-of-canonical-args",
+    "args": {
+      "name": "TEST: item",
+      "itemType": "task"
+    },
+    "grant": {
+      "jti": "grant-id",
+      "grantVersion": 1,
+      "grantType": "exact",
+      "scope": "dangerous",
+      "allowedTools": ["remove_item"],
+      "expiresAt": 1782196900,
+      "reason": "cleanup test data"
+    },
+    "executed": false,
+    "message": "Grant verified; OmniFocus mutation was not executed because dangerous dry-run mode is enabled."
+  }
+}
+```
+
 ## V2-Ready Payload Shape
 
 The claims schema intentionally leaves room for a future umbrella grant:

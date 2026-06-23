@@ -1,5 +1,5 @@
 import { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
-import { validateDangerousGrant } from './dangerousGrant.js';
+import { DangerousGrantClaims, dangerousArgsHash, validateDangerousGrant } from './dangerousGrant.js';
 
 export type OmniFocusMcpMode = 'readonly' | 'write' | 'dangerous';
 export type ToolAccessLevel = 'read' | 'write' | 'dangerous';
@@ -102,11 +102,39 @@ export function dangerousGrantRequiredResult(toolName: string, reason: string): 
   };
 }
 
-export function dangerousDryRunResult(toolName: string): ToolResult {
+export function dangerousDryRunResult(
+  toolName: string,
+  args: Record<string, unknown>,
+  claims?: DangerousGrantClaims
+): ToolResult {
+  const strippedArgs = stripDangerousGrant(args);
+  const payload = {
+    dryRun: true,
+    tool: toolName,
+    accessLevel: 'dangerous',
+    argsHash: dangerousArgsHash(args),
+    args: strippedArgs,
+    grant: claims ? {
+      jti: claims.jti,
+      grantVersion: claims.grant_version,
+      grantType: claims.grant_type,
+      scope: claims.scope,
+      allowedTools: claims.allowed_tools,
+      expiresAt: claims.exp,
+      notBefore: claims.nbf,
+      reason: claims.reason,
+    } : undefined,
+    executed: false,
+    message: 'Grant verified; OmniFocus mutation was not executed because dangerous dry-run mode is enabled.',
+  };
+
   return {
     content: [{
       type: 'text',
-      text: `Dangerous dry run: grant verified for "${toolName}", but OMNIFOCUS_MCP_DANGEROUS_DRY_RUN is enabled so no OmniFocus mutation was executed.`
+      text: [
+        `Dangerous dry run: grant verified for "${toolName}", but OMNIFOCUS_MCP_DANGEROUS_DRY_RUN is enabled so no OmniFocus mutation was executed.`,
+        JSON.stringify({ dangerousDryRun: payload }, null, 2),
+      ].join('\n')
     }]
   };
 }
@@ -141,7 +169,7 @@ export function guardToolHandler(toolName: string, handler: ToolHandler): ToolHa
         return dangerousGrantRequiredResult(toolName, grantResult.reason ?? 'Grant validation failed.');
       }
       if (isDangerousDryRunEnabled()) {
-        return dangerousDryRunResult(toolName);
+        return dangerousDryRunResult(toolName, args, grantResult.claims);
       }
     }
 
