@@ -48,6 +48,33 @@ Before live destructive MCP cleanup:
 4. Confirm `OmniFocusDatabase.db` in the backup is non-empty.
 5. Optionally run a read-only `dump_database` snapshot for human-readable audit context.
 
-## Not Yet Tested
+## Verified Backup
 
-The script has been added but has not yet been run against the live OmniFocus database in this session, because it will quit and reopen OmniFocus.
+The backup script was run successfully on 2026-06-23 before live destructive cleanup.
+
+Backup path:
+
+```text
+~/Workspace/OmniFocus-MCP-local-backups/20260623-005401/
+```
+
+Verified files:
+
+```text
+ArchiveDatabase.db
+ArchiveDatabase.db-shm
+ArchiveDatabase.db-wal
+OmniFocusDatabase.db
+OmniFocusDatabase.db-shm
+OmniFocusDatabase.db-wal
+manifest.txt
+```
+
+Key size checks:
+
+```text
+ArchiveDatabase.db size=3997696
+OmniFocusDatabase.db size=1630208
+```
+
+`OmniFocusDatabase.db-wal` was `0B`, which is expected after a clean quit/checkpoint.

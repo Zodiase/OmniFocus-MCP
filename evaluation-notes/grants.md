@@ -119,4 +119,36 @@ The preferred no-export path is still worth investigating: use the 1Password SSH
   - `edit_item` with project `newProjectStatus: dropped`
   - `batch_add_items` with 11 items
 
-No live destructive OmniFocus cleanup was performed while adding this grant layer.
+## Live Cleanup Test
+
+After creating a full local OmniFocus model backup, one live destructive cleanup was performed through MCP with a valid exact grant.
+
+Removed project:
+
+```text
+TEST: OmniFocus MCP write smoke 2026-06-23T06-29-58-260Z
+```
+
+Removed project ID:
+
+```text
+iqF4214Wvsw
+```
+
+The `remove_item` call returned `dangerousAction.executed: true`, `dangerousAction.dryRun: false`, and reason:
+
+```text
+cleanup write-smoke TEST project after backup 20260623-005401
+```
+
+Post-cleanup query for tasks in the project returned:
+
+```text
+No tasks found matching the specified criteria.
+```
+
+The write-smoke tag remains because the MCP server does not currently expose tag deletion:
+
+```text
+TEST-write-smoke-2026-06-23T06-29-58-260Z
+```
